@@ -149,6 +149,8 @@ class Game():
 		bool: whether the player may move or not
 
 		"""
+		if player == Player.NONE:
+			return False
 		return (self.state == State.PLAY or (self.state == State.START and player == Player.CMAN))
 
 	def apply_move(self, player, direction):
