@@ -1,6 +1,14 @@
 from cman_utils import *
 import socket
 import argparse
+from cman_game_map import *
+from copy import deepcopy
+
+CHAR_VISUAL = {WALL_CHAR: "█",
+               POINT_CHAR: "*",
+               CMAN_CHAR: "☺",
+               SPIRIT_CHAR: "@",
+               FREE_CHAR: " "}
 
 OPCODES = {"join": 0x00,
            "move": 0x01,
@@ -8,6 +16,7 @@ OPCODES = {"join": 0x00,
            "game update": 0x80,
            "end": 0x8F,
            "error": 0xFF}
+
 ERRORS = { 0: "ERROR: Wrong opcode sent to server",
            1: "ERROR: No data sent",
            2: "ERROR: Invalid directions",
@@ -17,6 +26,54 @@ ERRORS = { 0: "ERROR: Wrong opcode sent to server",
 ROLE_TO_CODE = {"watcher": 0,
                 "cman": 1,
                 "spirit": 2}
+
+def print_map(board):
+    rows, columns = (len(board), len(board[0]))
+    for i in range(rows):
+        for j in range(columns):
+            print(CHAR_VISUAL[board[i][j]], end='')
+        print("")
+
+def load_map(map_path):
+    board = read_map(map_path).split('\n')
+    board = [list(row) for row in board]
+    return board
+
+def get_full_map(board, points, cman_coords, spirit_coords):
+    board = deepcopy(board)
+    i, j = cman_coords
+    board[i][j] = CMAN_CHAR
+    i, j = spirit_coords
+    board[i][j] = SPIRIT_CHAR
+    for coords in points:
+        i, j = coords
+        board[i][j] = POINT_CHAR
+    return board
+
+def strip_map(board):
+    board = deepcopy(board)
+    rows, columns = (len(board), len(board[0]))
+    for i in range(rows):
+        for j in range(columns):
+            board[i][j] = FREE_CHAR if board[i][j] != WALL_CHAR else WALL_CHAR
+    return board
+
+
+class Map:
+    def __init__(self):
+        og_map = load_map("map.txt")
+        self.rows = len(og_map)
+        self.cols = len(og_map[0])
+        self.point_positions = [(i, j) for i in range(self.rows) for j in range(self.cols) if
+                                og_map[i][j] == POINT_CHAR]
+        self.cman_coords = [(i, j) for i in range(self.rows) for j in range(self.cols) if og_map[i][j] == CMAN_CHAR]
+        self.cman_coords = self.cman_coords[0]
+        self.spirit_coords = [(i, j) for i in range(self.rows) for j in range(self.cols) if og_map[i][j] == SPIRIT_CHAR]
+        self.spirit_coords = self.spirit_coords[0]
+        self.base_map = strip_map(og_map)
+        self.full_map = get_full_map(self.base_map, self.point_positions, self.cman_coords, self.spirit_coords)
+
+
 
 
 def get_args():
@@ -46,13 +103,32 @@ class Client:
         self.socket.close()
         exit(1)
 
+    def game_end(self, message):
+        _, winner, captures, score = message
+        winner = "Cman" if winner == 1 else "Spirit"
+        print(f"GAME OVER\n The winner is: {winner}")
+        print(f"Cman got captured: {captures} times")
+        print(f"Score: {score}")
+        self.socket.close()
+        exit(0)
+
+    def handle_game_update(self, message):
+        pass
+
+
     def run(self):
         self.join_game()
+        opcode_to_handler = {0x80: self.handle_game_update,
+                             0x8F: self.game_end,
+                             0xFF: self.handle_error}
         while True:
             data, addr = self.socket.recvfrom(1024)
             if addr != self.server_address:
-                continue #Received message not from server
+                continue #Received message not from server, throw the packet
+
             opcode = data[0]
 
+# if __name__ == "__main__":
+#     print_map("map.txt")
 
-
+m = Map()
