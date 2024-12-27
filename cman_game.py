@@ -46,6 +46,7 @@ class Game():
 							   for j in range(self.board_dims[1])
 							   if self.board[i][j] == gm.POINT_CHAR}
 		self.restart_game()
+		self.state = State.START
 
 	def restart_game(self):
 		"""

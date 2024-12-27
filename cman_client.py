@@ -3,12 +3,27 @@ import socket
 import argparse
 from cman_game_map import *
 from copy import deepcopy
+import os
+import platform
+import time
+
+fps = 30
+frame_duration = 1/fps
 
 CHAR_VISUAL = {WALL_CHAR: "█",
                POINT_CHAR: "*",
                CMAN_CHAR: "☺",
                SPIRIT_CHAR: "@",
                FREE_CHAR: " "}
+
+KEY_TO_DIRECTION = {'W': 0,
+                    'A': 1,
+                    'S': 2,
+                    'D:': 3,
+                    'w': 0,
+                    'a': 1,
+                    's': 2,
+                    'd:': 3}
 
 OPCODES = {"join": 0x00,
            "move": 0x01,
@@ -27,7 +42,15 @@ ROLE_TO_CODE = {"watcher": 0,
                 "cman": 1,
                 "spirit": 2}
 
+
+def clear_terminal():
+    if platform.system() == "Windows":
+        os.system("cls")
+    else:
+        os.system("clear")
+
 def print_map(board):
+    clear_terminal()
     rows, columns = (len(board), len(board[0]))
     for i in range(rows):
         for j in range(columns):
@@ -62,16 +85,34 @@ def strip_map(board):
 class Map:
     def __init__(self):
         og_map = load_map("map.txt")
+        self.attempts = 0
         self.rows = len(og_map)
         self.cols = len(og_map[0])
-        self.point_positions = [(i, j) for i in range(self.rows) for j in range(self.cols) if
+        self.points_alive = [True]*MAX_POINTS
+        self.og_point_positions = [(i, j) for i in range(self.rows) for j in range(self.cols) if
                                 og_map[i][j] == POINT_CHAR]
+        self.point_positions = deepcopy(self.og_point_positions)
         self.cman_coords = [(i, j) for i in range(self.rows) for j in range(self.cols) if og_map[i][j] == CMAN_CHAR]
         self.cman_coords = self.cman_coords[0]
         self.spirit_coords = [(i, j) for i in range(self.rows) for j in range(self.cols) if og_map[i][j] == SPIRIT_CHAR]
         self.spirit_coords = self.spirit_coords[0]
         self.base_map = strip_map(og_map)
         self.full_map = get_full_map(self.base_map, self.point_positions, self.cman_coords, self.spirit_coords)
+
+
+    def refresh_map(self):
+        self.full_map = get_full_map(self.base_map, self.point_positions, self.cman_coords, self.spirit_coords)
+
+    def refresh_points(self, message: bytearray):
+        byte_array = message[7:12]
+        for i in range(40):
+            byte_index = i // 8
+            bit_index = i % 8
+            bit = (byte_array[byte_index] >> bit_index) & 1
+            self.points_alive[i] = (bit == 0)
+        print(self.points_alive)
+        self.point_positions = [self.og_point_positions[i] for i in range(MAX_POINTS) if self.points_alive[i]]
+        self.refresh_map()
 
 
 
@@ -87,11 +128,12 @@ def get_args():
 
 class Client:
     def __init__(self):
+        self.map = Map()
         self.role, addr, port = get_args()
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.socket.bind(('localhost', port))
         self.server_address = (addr, port)
         self.socket.setblocking(False)
+        self.can_move = False
 
     def join_game(self):
         message = bytearray([OPCODES["join"], ROLE_TO_CODE[self.role]])
@@ -113,22 +155,67 @@ class Client:
         exit(0)
 
     def handle_game_update(self, message):
-        pass
+        self.can_move = message[1] == 0
+        self.map.cman_coords = (message[2], message[3])
+        self.map.spirit_coords = (message[4], message[5])
+        self.map.attempts = message[6]
+        self.map.refresh_points(message)
+        print_map(self.map.full_map)
+
+
+    def handle_server_response(self):
+        opcode_to_handler = {0x80: self.handle_game_update,
+                             0x8F: self.game_end,
+                             0xFF: self.handle_error}
+        try:
+            data, addr = self.socket.recvfrom(1024)
+        except BlockingIOError:
+            return
+        except Exception as e:
+            print("Error enocuntered with socket, existing")
+            exit(0)
+
+        if addr != self.server_address:
+            return
+        opcode = data[0]
+        if opcode not in opcode_to_handler:
+            return #error
+        opcode_to_handler[opcode](data)
+
+    def send_move(self, move):
+        message = bytearray([OPCODES["move"], move])
+        self.socket.sendto(message, self.server_address)
+
+    def send_quit(self):
+        message = bytearray([OPCODES["quit"]])
+        self.socket.sendto(message, self.server_address)
+        self.socket.close()
+        exit(0)
+
+    def handle_player_input(self):
+        if not self.can_move:
+            return
+        pressed = get_pressed_keys()
+        for key in pressed:
+            if key in KEY_TO_DIRECTION:
+                self.send_move(KEY_TO_DIRECTION[key])
+                return
+            if key == 'Q':
+                self.send_quit()
 
 
     def run(self):
         self.join_game()
-        opcode_to_handler = {0x80: self.handle_game_update,
-                             0x8F: self.game_end,
-                             0xFF: self.handle_error}
         while True:
-            data, addr = self.socket.recvfrom(1024)
-            if addr != self.server_address:
-                continue #Received message not from server, throw the packet
+            start_time = time.time()
+            self.handle_server_response()
+            self.handle_player_input()
+            elapsed_time = time.time() - start_time
+            sleep_time = max(0, frame_duration - elapsed_time)
+            time.sleep(sleep_time)
 
-            opcode = data[0]
 
-# if __name__ == "__main__":
-#     print_map("map.txt")
 
-m = Map()
+if __name__ == "__main__":
+    client = Client()
+    client.run()
