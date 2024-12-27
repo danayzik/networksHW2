@@ -6,8 +6,9 @@ from copy import deepcopy
 import os
 import platform
 import time
+import threading
 
-fps = 30
+fps = 60
 frame_duration = 1/fps
 
 CHAR_VISUAL = {WALL_CHAR: "█",
@@ -19,11 +20,11 @@ CHAR_VISUAL = {WALL_CHAR: "█",
 KEY_TO_DIRECTION = {'W': 0,
                     'A': 1,
                     'S': 2,
-                    'D:': 3,
+                    'D': 3,
                     'w': 0,
                     'a': 1,
                     's': 2,
-                    'd:': 3}
+                    'd': 3}
 
 OPCODES = {"join": 0x00,
            "move": 0x01,
@@ -110,7 +111,6 @@ class Map:
             bit_index = i % 8
             bit = (byte_array[byte_index] >> bit_index) & 1
             self.points_alive[i] = (bit == 0)
-        print(self.points_alive)
         self.point_positions = [self.og_point_positions[i] for i in range(MAX_POINTS) if self.points_alive[i]]
         self.refresh_map()
 
@@ -134,6 +134,7 @@ class Client:
         self.server_address = (addr, port)
         self.socket.setblocking(False)
         self.can_move = False
+        self.last_key = None
 
     def join_game(self):
         message = bytearray([OPCODES["join"], ROLE_TO_CODE[self.role]])
@@ -193,23 +194,34 @@ class Client:
         exit(0)
 
     def handle_player_input(self):
+        while True:
+            pressed = get_pressed_keys()
+            for key in pressed:
+                if key in KEY_TO_DIRECTION or key == 'Q' or key == 'q':
+                    self.last_key = key
+
+
+    def move(self):
         if not self.can_move:
             return
-        pressed = get_pressed_keys()
-        for key in pressed:
+        key = self.last_key
+        self.last_key = None
+        if key is not None:
             if key in KEY_TO_DIRECTION:
                 self.send_move(KEY_TO_DIRECTION[key])
                 return
-            if key == 'Q':
+            if key == 'Q' or key == 'q':
                 self.send_quit()
-
 
     def run(self):
         self.join_game()
+        input_thread =  threading.Thread(target=self.handle_player_input, args=())
+        input_thread.daemon = True
+        input_thread.start()
         while True:
             start_time = time.time()
             self.handle_server_response()
-            self.handle_player_input()
+            self.move()
             elapsed_time = time.time() - start_time
             sleep_time = max(0, frame_duration - elapsed_time)
             time.sleep(sleep_time)

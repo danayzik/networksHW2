@@ -5,7 +5,7 @@ from logging import exception
 from typing import Optional
 from cman_game import Game, MAX_ATTEMPTS, Player
 import time
-fps = 30
+fps = 60
 frame_duration = 1/fps
 
 OPCODES = {"join": 0x00,
