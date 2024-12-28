@@ -8,18 +8,15 @@ class KeyInputHandler:
 
     def on_press(self, key):
         try:
-            if key.char not in self.pressed_keys:
-                self.pressed_keys.append(key.char)
-        except AttributeError:
-            if str(key) not in self.pressed_keys:
-                self.pressed_keys.append(str(key))
 
-    def get_pressed_keys(self, keys_filter=None):
+            self.pressed_keys.append(key.char)
+        except AttributeError:
+
+            self.pressed_keys.append(str(key))
+
+    def get_pressed_keys(self):
         # Return filtered keys or all pressed keys if no filter is provided
-        if keys_filter is None:
-            return self.pressed_keys
-        else:
-            return [key for key in self.pressed_keys if key in keys_filter]
+        return self.pressed_keys
 
     def clear_pressed_keys(self):
         # Clear the list of pressed keys after processing

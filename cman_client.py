@@ -7,7 +7,7 @@ import select
 from cman_game_map import Map
 import time
 import threading
-from constants import OPCODES, ROLE_TO_CODE, ERRORS, KEY_TO_DIRECTION, frame_duration
+from constants import OPCODES, ROLE_TO_CODE, ERRORS, KEY_TO_DIRECTION
 
 
 
@@ -86,7 +86,6 @@ class Client:
                 self.move()
 
 
-
     def send_move(self, move):
         message = bytearray([OPCODES["move"], move])
         self.socket.sendto(message, self.server_address)
@@ -103,7 +102,10 @@ class Client:
             for key in pressed_keys:
                 if key in KEY_TO_DIRECTION or key == 'Q' or key == 'q':
                     self.last_key = key
-            self.key_handler.clear_pressed_keys()
+                    self.key_handler.clear_pressed_keys()
+                    time.sleep(0.05)
+                    continue
+
 
 
     def move(self):
@@ -117,6 +119,7 @@ class Client:
                 return
             if key == 'Q' or key == 'q':
                 self.send_quit()
+
 
     def run(self):
         self.join_game()

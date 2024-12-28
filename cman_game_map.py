@@ -3,6 +3,8 @@ from copy import deepcopy
 import os
 import platform
 
+
+
 def read_map(path):
     """
 
@@ -91,6 +93,7 @@ class Map:
         self.base_map = strip_map(og_map)
         self.full_map = get_full_map(self.base_map, self.point_positions, self.cman_coords, self.spirit_coords)
 
+
     def print_map(self):
         print_map(self.full_map)
 
@@ -106,3 +109,4 @@ class Map:
             self.points_alive[i] = (bit == 0)
         self.point_positions = [self.og_point_positions[i] for i in range(MAX_POINTS) if self.points_alive[i]]
         self.refresh_map()
+
