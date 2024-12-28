@@ -33,8 +33,13 @@ class Client:
         self.last_update_message: Optional[bytearray] = None
 
     def join_game(self):
+        print(f"Will try to join as {self.role}")
+        if self.role == "watcher":
+            print("You will not be able to move")
         message = bytearray([OPCODES["join"], ROLE_TO_CODE[self.role]])
         self.socket.sendto(message, self.server_address)
+        print("Sent join request, waiting for players")
+        print("Map will load when game starts")
 
     def handle_error(self, message):
         error_message = ERRORS[message[1]]
@@ -45,7 +50,7 @@ class Client:
     def game_end(self, message):
         _, winner, captures, score = message
         winner = "Cman" if winner == 1 else "Spirit"
-        print(f"GAME OVER\n The winner is: {winner}")
+        print(f"GAME OVER\nThe winner is: {winner}")
         print(f"Cman got captured: {captures} times")
         print(f"Score: {score}")
         self.socket.close()
@@ -61,6 +66,9 @@ class Client:
             self.map.attempts = message[6]
             self.map.refresh_points(message)
             self.map.print_map()
+            print(f"Number of times cman was caught: {self.map.attempts}")
+            if self.role == "watcher":
+                print("Spectator mode")
 
 
     def handle_server_response(self):
@@ -109,12 +117,12 @@ class Client:
 
 
     def move(self):
-        if not self.can_move:
-            return
         key = self.last_key
         self.last_key = None
         if key is not None:
             if key in KEY_TO_DIRECTION:
+                if not self.can_move:
+                    return
                 self.send_move(KEY_TO_DIRECTION[key])
                 return
             if key == 'Q' or key == 'q':
@@ -135,4 +143,7 @@ class Client:
 
 if __name__ == "__main__":
     client = Client()
-    client.run()
+    try:
+        client.run()
+    except KeyboardInterrupt:
+        client.send_quit()

@@ -57,7 +57,6 @@ class Game():
 
 		"""
 		self.cur_coords = self.start_coords[::]
-		print(self.cur_coords)
 		self.score = 0
 		for p in self.points.keys():
 			self.points[p] = 1

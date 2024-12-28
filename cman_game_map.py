@@ -59,11 +59,12 @@ def get_full_map(board, points, cman_coords, spirit_coords):
     board = deepcopy(board)
     i, j = cman_coords
     board[i][j] = CMAN_CHAR
-    i, j = spirit_coords
-    board[i][j] = SPIRIT_CHAR
+
     for coords in points:
         i, j = coords
         board[i][j] = POINT_CHAR
+    i, j = spirit_coords
+    board[i][j] = SPIRIT_CHAR
     return board
 
 def strip_map(board):
