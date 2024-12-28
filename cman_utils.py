@@ -1,50 +1,30 @@
-import pynput, time, msvcrt
+import pynput
 
-def _flush_input():
-    try:
-        while msvcrt.kbhit():
-            msvcrt.getch()
-    except ImportError:
-        import sys, termios
-        termios.tcflush(sys.stdin, termios.TCIOFLUSH)
+class KeyInputHandler:
+    def __init__(self):
+        self.pressed_keys = []
+        self.listener = pynput.keyboard.Listener(on_press=self.on_press)
+        self.listener.start()
 
-def get_pressed_keys(keys_filter = None):
-    """
-    
-    Returns a list of all pressed keys at the time of the call.
-
-    Parameters:
-
-    keys_filter (list[str]): A list of specific keys to check. If omitted, every key is checked.
-
-    Returns:
-
-    list[str]: A list of currently pressed keys.
-
-    """
-    keys_lst = []
-    def on_press(key):
+    def on_press(self, key):
         try:
-            if key.char not in keys_lst:
-                keys_lst.append(key.char)
+            if key.char not in self.pressed_keys:
+                self.pressed_keys.append(key.char)
         except AttributeError:
-            if key not in keys_lst:
-                keys_lst.append(str(key))
-    listener = pynput.keyboard.Listener(on_press=on_press)
-    listener.start()
-    time.sleep(0.03)
-    listener.stop()
-    _flush_input()
-    if keys_filter is None:
-        return keys_lst
-    else:
-        return [k for k in keys_filter if k in keys_lst]
+            if str(key) not in self.pressed_keys:
+                self.pressed_keys.append(str(key))
 
-def clear_print(*args, **kwargs):
-    """
+    def get_pressed_keys(self, keys_filter=None):
+        # Return filtered keys or all pressed keys if no filter is provided
+        if keys_filter is None:
+            return self.pressed_keys
+        else:
+            return [key for key in self.pressed_keys if key in keys_filter]
 
-    Clears the terminal before calling print()
+    def clear_pressed_keys(self):
+        # Clear the list of pressed keys after processing
+        self.pressed_keys = []
 
-    """
-    print("\033[H\033[J", end="")
-    print(*args, **kwargs)
+    def stop_listener(self):
+        # Stop the listener (you can call this when the game ends or at the right time)
+        self.listener.stop()

@@ -1,4 +1,4 @@
-FPS = 60
+FPS = 1.5
 
 
 OPCODES = {"join": 0x00,

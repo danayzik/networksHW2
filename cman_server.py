@@ -141,8 +141,7 @@ class Server:
         spirit_address = self.spirit_player.address
         self.game.apply_move(Player.CMAN, self.cman_move)
         self.game.apply_move(Player.SPIRIT, self.spirit_move)
-        self.cman_move = -1
-        self.spirit_move = -1
+
         can_move = self.game.can_move(self.cman_player.role - 1)
         message = bytearray([OPCODES["game update"], int(not can_move)])
         self.append_game_state_to_message(message)
