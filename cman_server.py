@@ -5,6 +5,7 @@ from typing import Optional
 from cman_game import Game, MAX_ATTEMPTS, Player, State
 import time
 from constants import frame_duration, OPCODES
+import select
 
 
 def read_script_inputs() -> int:
@@ -33,7 +34,6 @@ class Server:
         self.port = read_script_inputs()
         self.server_address = ("::", self.port)
         self.udp_socket.bind(self.server_address)
-        self.udp_socket.setblocking(False)
         self.cman_player:Optional[ServerClient] = None
         self.spirit_player:Optional[ServerClient] = None
         self.spectators: list[ServerClient] = []
@@ -194,14 +194,17 @@ class Server:
 
 
     def run(self):
+        inputs = [self.udp_socket]
         opcode_to_handler = {0x01: self.handle_movement,
                              0x0F: self.handle_quit}
         opcode_length = {0x01: 1,
                          0x0F: 0,
                          0x00: 1}
+
         while True:
             start_time = time.time()
-            try:
+            readable, _, _ = select.select(inputs, [], [], frame_duration/3)
+            if readable:
                 data, client_address = self.udp_socket.recvfrom(1024)
                 i = 0
                 while i < len(data):
@@ -218,12 +221,6 @@ class Server:
                             self.udp_socket.sendto(message, client_address)
                     else:
                         self.handle_new_client(bytearray([opcode])+command, client_address)
-            except BlockingIOError:
-                pass
-            except Exception as e:
-                print(f"Error enocuntered with socket, existing\n{e}")
-                exit(0)
-
             if self.game_ongoing:
                 self.send_game_updates()
             elapsed_time = time.time() - start_time

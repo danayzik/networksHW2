@@ -3,6 +3,7 @@ from typing import Optional
 from cman_utils import *
 import socket
 import argparse
+import select
 from cman_game_map import Map
 import time
 import threading
@@ -25,7 +26,6 @@ class Client:
         self.role, addr, port = get_args()
         self.socket = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
         self.server_address = (addr, port)
-        self.socket.setblocking(False)
         self.can_move = False
         self.last_key = None
         self.last_update_message: Optional[bytearray] = None
@@ -68,7 +68,8 @@ class Client:
         opcode_length = {0x80: 11,
                              0x8F: 3,
                              0xFF: 1}
-        try:
+        readable, _, _ = select.select([self.socket], [], [], frame_duration/3)
+        if readable:
             data, addr = self.socket.recvfrom(1024)
             i = 0
             while i < len(data):
@@ -80,11 +81,7 @@ class Client:
                     return  # error
                 opcode_to_handler[opcode](bytearray([opcode]) + command)
 
-        except BlockingIOError:
-            return
-        except Exception as e:
-            print("Error enocuntered with socket, existing")
-            exit(0)
+
 
         # if addr != self.server_address:
         #     return
