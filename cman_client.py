@@ -23,7 +23,7 @@ class Client:
     def __init__(self):
         self.map = Map()
         self.role, addr, port = get_args()
-        self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.socket = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
         self.server_address = (addr, port)
         self.socket.setblocking(False)
         self.can_move = False
@@ -66,20 +66,25 @@ class Client:
         opcode_to_handler = {0x80: self.handle_game_update,
                              0x8F: self.game_end,
                              0xFF: self.handle_error}
+        opcode_length = {0x80: 11,
+                             0x8F: 3,
+                             0xFF: 1}
         try:
-            data, addr = self.socket.recvfrom(1024)
+            opcode, addr = self.socket.recvfrom(1)
+            opcode = int(opcode)
+            data, addr = self.socket.recvfrom(opcode_length[opcode])
+
         except BlockingIOError:
             return
         except Exception as e:
             print("Error enocuntered with socket, existing")
             exit(0)
 
-        if addr != self.server_address:
-            return
-        opcode = data[0]
+        # if addr != self.server_address:
+        #     return
         if opcode not in opcode_to_handler:
             return #error
-        opcode_to_handler[opcode](data)
+        opcode_to_handler[opcode](opcode+data)
 
     def send_move(self, move):
         message = bytearray([OPCODES["move"], move])

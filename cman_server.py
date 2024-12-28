@@ -29,9 +29,9 @@ class ServerClient:
 class Server:
     def __init__(self) -> None:
         print("Server started")
-        self.udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.udp_socket = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
         self.port = read_script_inputs()
-        self.server_address = ("127.0.0.1", self.port)
+        self.server_address = ("::", self.port)
         self.udp_socket.bind(self.server_address)
         self.udp_socket.setblocking(False)
         self.cman_player:Optional[ServerClient] = None
@@ -136,6 +136,7 @@ class Server:
         exit(0)
 
     def send_game_updates(self) -> None:
+
         cman_address = self.cman_player.address
         spirit_address = self.spirit_player.address
         self.game.apply_move(Player.CMAN, self.cman_move)
@@ -195,19 +196,23 @@ class Server:
     def run(self):
         opcode_to_handler = {0x01: self.handle_movement,
                              0x0F: self.handle_quit}
+        opcode_length = {0x01: 2,
+                         0x0F: 1,
+                         0x00: 2}
         while True:
             start_time = time.time()
             try:
-                data, client_address = self.udp_socket.recvfrom(1024)
+                opcode, client_address = self.udp_socket.recvfrom(1)
+                data, client_address = self.udp_socket.recvfrom(opcode_length[opcode])
+                client_address = (client_address[0] + "%11", client_address[1])
                 if client_address in self.clients:
-                    opcode = data[0]
                     if opcode in opcode_to_handler:
-                        opcode_to_handler[opcode](client_address, data)
+                        opcode_to_handler[opcode](client_address, opcode+data)
                     else:
                         message = bytearray([OPCODES["error"], 0])
                         self.udp_socket.sendto(message, client_address)
                 else:
-                    self.handle_new_client(data, client_address)
+                    self.handle_new_client(opcode+data, client_address)
             except BlockingIOError:
                 pass
             except Exception as e:
