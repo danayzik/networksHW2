@@ -78,7 +78,7 @@ class Client:
                 i += opcode_length[opcode]
                 if opcode not in opcode_to_handler:
                     return  # error
-                opcode_to_handler[opcode]([opcode] + command)
+                opcode_to_handler[opcode](bytearray([opcode]) + command)
 
         except BlockingIOError:
             return

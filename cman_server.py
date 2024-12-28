@@ -212,12 +212,12 @@ class Server:
                     client_address = (client_address[0] + "%11", client_address[1])
                     if client_address in self.clients:
                         if opcode in opcode_to_handler:
-                            opcode_to_handler[opcode](client_address, [opcode]+command)
+                            opcode_to_handler[opcode](client_address, bytearray([opcode])+command)
                         else:
                             message = bytearray([OPCODES["error"], 0])
                             self.udp_socket.sendto(message, client_address)
                     else:
-                        self.handle_new_client([opcode]+command, client_address)
+                        self.handle_new_client(bytearray([opcode])+command, client_address)
             except BlockingIOError:
                 pass
             except Exception as e:
