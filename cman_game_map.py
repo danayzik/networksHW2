@@ -109,4 +109,3 @@ class Map:
             self.points_alive[i] = (bit == 0)
         self.point_positions = [self.og_point_positions[i] for i in range(MAX_POINTS) if self.points_alive[i]]
         self.refresh_map()
-
