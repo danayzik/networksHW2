@@ -61,7 +61,6 @@ class Client:
             self.map.print_map()
 
 
-
     def handle_server_response(self):
         opcode_to_handler = {0x80: self.handle_game_update,
                              0x8F: self.game_end,
@@ -70,9 +69,16 @@ class Client:
                              0x8F: 3,
                              0xFF: 1}
         try:
-            opcode, addr = self.socket.recvfrom(1)
-            opcode = int(opcode)
-            data, addr = self.socket.recvfrom(opcode_length[opcode])
+            data, addr = self.socket.recvfrom(1024)
+            i = 0
+            while i < len(data):
+                opcode = data[i]
+                i += 1
+                command = data[i:i + opcode_length[opcode]]
+                i += opcode_length[opcode]
+                if opcode not in opcode_to_handler:
+                    return  # error
+                opcode_to_handler[opcode]([opcode] + command)
 
         except BlockingIOError:
             return
@@ -82,9 +88,7 @@ class Client:
 
         # if addr != self.server_address:
         #     return
-        if opcode not in opcode_to_handler:
-            return #error
-        opcode_to_handler[opcode](opcode+data)
+
 
     def send_move(self, move):
         message = bytearray([OPCODES["move"], move])

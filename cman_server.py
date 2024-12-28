@@ -196,27 +196,32 @@ class Server:
     def run(self):
         opcode_to_handler = {0x01: self.handle_movement,
                              0x0F: self.handle_quit}
-        opcode_length = {0x01: 2,
-                         0x0F: 1,
-                         0x00: 2}
+        opcode_length = {0x01: 1,
+                         0x0F: 0,
+                         0x00: 1}
         while True:
             start_time = time.time()
             try:
-                opcode, client_address = self.udp_socket.recvfrom(1)
-                data, client_address = self.udp_socket.recvfrom(opcode_length[opcode])
-                client_address = (client_address[0] + "%11", client_address[1])
-                if client_address in self.clients:
-                    if opcode in opcode_to_handler:
-                        opcode_to_handler[opcode](client_address, opcode+data)
+                data, client_address = self.udp_socket.recvfrom(1024)
+                i = 0
+                while i < len(data):
+                    opcode = data[i]
+                    i += 1
+                    command = data[i:i + opcode_length[opcode]]
+                    i += opcode_length[opcode]
+                    client_address = (client_address[0] + "%11", client_address[1])
+                    if client_address in self.clients:
+                        if opcode in opcode_to_handler:
+                            opcode_to_handler[opcode](client_address, [opcode]+command)
+                        else:
+                            message = bytearray([OPCODES["error"], 0])
+                            self.udp_socket.sendto(message, client_address)
                     else:
-                        message = bytearray([OPCODES["error"], 0])
-                        self.udp_socket.sendto(message, client_address)
-                else:
-                    self.handle_new_client(opcode+data, client_address)
+                        self.handle_new_client([opcode]+command, client_address)
             except BlockingIOError:
                 pass
             except Exception as e:
-                print("Error enocuntered with socket, existing")
+                print(f"Error enocuntered with socket, existing\n{e}")
                 exit(0)
 
             if self.game_ongoing:
