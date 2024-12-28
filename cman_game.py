@@ -1,5 +1,6 @@
-import cman_game_map as gm
+from cman_game_map import read_map
 import os
+from map_constants import PLAYER_CHARS, POINT_CHAR, PASS_CHARS
 from enum import IntEnum
 
 MAX_ATTEMPTS = 3
@@ -15,6 +16,7 @@ class Direction(IntEnum):
 	LEFT = 1
 	DOWN = 2
 	RIGHT = 3
+	NONE = -1
 
 class State(IntEnum):
 	WAIT = 0	# Game may not start yet
@@ -34,19 +36,19 @@ class Game():
 
 		"""
 		assert os.path.isfile(map_path), "map file does not exist."
-		self.board = gm.read_map(map_path).split('\n')
+		self.board = read_map(map_path).split('\n')
 		self.board_dims = (len(self.board), len(self.board[0]))
 
 		self.start_coords = []
-		for p_char in gm.PLAYER_CHARS:
+		for p_char in PLAYER_CHARS:
 			start_row = [p_char in row for row in self.board].index(True)
 			self.start_coords.append((start_row, self.board[start_row].index(p_char)))
 
 		self.points = {(i,j):1 for i in range(self.board_dims[0])
 							   for j in range(self.board_dims[1])
-							   if self.board[i][j] == gm.POINT_CHAR}
+							   if self.board[i][j] == POINT_CHAR}
 		self.restart_game()
-		self.state = State.START
+
 
 	def restart_game(self):
 		"""
@@ -170,7 +172,7 @@ class Game():
 		bool: Whether the game state was changed or not
 
 		"""
-		if not self.can_move(player):
+		if direction == Direction.NONE:
 			return False
 
 		p_coords = self.cur_coords[player]
@@ -180,7 +182,7 @@ class Game():
 
 		if any(x < 0 for x in next_coords) or next_coords[0] >= self.board_dims[0] or next_coords[1] >= self.board_dims[1]:
 			return False
-		if self.board[next_coords[0]][next_coords[1]] not in gm.PASS_CHARS:
+		if self.board[next_coords[0]][next_coords[1]] not in PASS_CHARS:
 			return False
 		else:
 			self.state = State.PLAY

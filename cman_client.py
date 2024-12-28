@@ -1,119 +1,12 @@
+#!/usr/bin/python3
+from typing import Optional
 from cman_utils import *
 import socket
 import argparse
-from cman_game_map import *
-from copy import deepcopy
-import os
-import platform
+from cman_game_map import Map
 import time
 import threading
-
-fps = 60
-frame_duration = 1/fps
-
-CHAR_VISUAL = {WALL_CHAR: "█",
-               POINT_CHAR: "*",
-               CMAN_CHAR: "☺",
-               SPIRIT_CHAR: "@",
-               FREE_CHAR: " "}
-
-KEY_TO_DIRECTION = {'W': 0,
-                    'A': 1,
-                    'S': 2,
-                    'D': 3,
-                    'w': 0,
-                    'a': 1,
-                    's': 2,
-                    'd': 3}
-
-OPCODES = {"join": 0x00,
-           "move": 0x01,
-           "quit": 0x0F,
-           "game update": 0x80,
-           "end": 0x8F,
-           "error": 0xFF}
-
-ERRORS = { 0: "ERROR: Wrong opcode sent to server",
-           1: "ERROR: No data sent",
-           2: "ERROR: Invalid directions",
-           3: "ERROR: Incorrect desired role",
-           10: "ERROR: Role taken"}
-
-ROLE_TO_CODE = {"watcher": 0,
-                "cman": 1,
-                "spirit": 2}
-
-
-def clear_terminal():
-    if platform.system() == "Windows":
-        os.system("cls")
-    else:
-        os.system("clear")
-
-def print_map(board):
-    clear_terminal()
-    rows, columns = (len(board), len(board[0]))
-    for i in range(rows):
-        for j in range(columns):
-            print(CHAR_VISUAL[board[i][j]], end='')
-        print("")
-
-def load_map(map_path):
-    board = read_map(map_path).split('\n')
-    board = [list(row) for row in board]
-    return board
-
-def get_full_map(board, points, cman_coords, spirit_coords):
-    board = deepcopy(board)
-    i, j = cman_coords
-    board[i][j] = CMAN_CHAR
-    i, j = spirit_coords
-    board[i][j] = SPIRIT_CHAR
-    for coords in points:
-        i, j = coords
-        board[i][j] = POINT_CHAR
-    return board
-
-def strip_map(board):
-    board = deepcopy(board)
-    rows, columns = (len(board), len(board[0]))
-    for i in range(rows):
-        for j in range(columns):
-            board[i][j] = FREE_CHAR if board[i][j] != WALL_CHAR else WALL_CHAR
-    return board
-
-
-class Map:
-    def __init__(self):
-        og_map = load_map("map.txt")
-        self.attempts = 0
-        self.rows = len(og_map)
-        self.cols = len(og_map[0])
-        self.points_alive = [True]*MAX_POINTS
-        self.og_point_positions = [(i, j) for i in range(self.rows) for j in range(self.cols) if
-                                og_map[i][j] == POINT_CHAR]
-        self.point_positions = deepcopy(self.og_point_positions)
-        self.cman_coords = [(i, j) for i in range(self.rows) for j in range(self.cols) if og_map[i][j] == CMAN_CHAR]
-        self.cman_coords = self.cman_coords[0]
-        self.spirit_coords = [(i, j) for i in range(self.rows) for j in range(self.cols) if og_map[i][j] == SPIRIT_CHAR]
-        self.spirit_coords = self.spirit_coords[0]
-        self.base_map = strip_map(og_map)
-        self.full_map = get_full_map(self.base_map, self.point_positions, self.cman_coords, self.spirit_coords)
-
-
-    def refresh_map(self):
-        self.full_map = get_full_map(self.base_map, self.point_positions, self.cman_coords, self.spirit_coords)
-
-    def refresh_points(self, message: bytearray):
-        byte_array = message[7:12]
-        for i in range(40):
-            byte_index = i // 8
-            bit_index = i % 8
-            bit = (byte_array[byte_index] >> bit_index) & 1
-            self.points_alive[i] = (bit == 0)
-        self.point_positions = [self.og_point_positions[i] for i in range(MAX_POINTS) if self.points_alive[i]]
-        self.refresh_map()
-
+from constants import OPCODES, ROLE_TO_CODE, ERRORS, KEY_TO_DIRECTION, frame_duration
 
 
 
@@ -135,6 +28,7 @@ class Client:
         self.socket.setblocking(False)
         self.can_move = False
         self.last_key = None
+        self.last_update_message: Optional[bytearray] = None
 
     def join_game(self):
         message = bytearray([OPCODES["join"], ROLE_TO_CODE[self.role]])
@@ -155,13 +49,17 @@ class Client:
         self.socket.close()
         exit(0)
 
+
     def handle_game_update(self, message):
-        self.can_move = message[1] == 0
-        self.map.cman_coords = (message[2], message[3])
-        self.map.spirit_coords = (message[4], message[5])
-        self.map.attempts = message[6]
-        self.map.refresh_points(message)
-        print_map(self.map.full_map)
+        if message != self.last_update_message:
+            self.last_update_message = message
+            self.can_move = message[1] == 0
+            self.map.cman_coords = (message[2], message[3])
+            self.map.spirit_coords = (message[4], message[5])
+            self.map.attempts = message[6]
+            self.map.refresh_points(message)
+            self.map.print_map()
+
 
 
     def handle_server_response(self):

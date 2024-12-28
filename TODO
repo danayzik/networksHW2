@@ -1,6 +1,5 @@
 1) Make game more responsive
-2) Make the correct points be shown and taken
+2) handle kill commands
 3) Print attempts
-4) Divide into files
+4) test quits
 5) Test on multiple machines
-6) handle wait for 2 players better

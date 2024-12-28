@@ -1,21 +1,11 @@
 #!/usr/bin/python3
 import socket
 import argparse
-from logging import exception
 from typing import Optional
-from cman_game import Game, MAX_ATTEMPTS, Player
+from cman_game import Game, MAX_ATTEMPTS, Player, State
 import time
-fps = 60
-frame_duration = 1/fps
+from constants import frame_duration, OPCODES
 
-OPCODES = {"join": 0x00,
-           "move": 0x01,
-           "quit": 0x0F,
-           "game update": 0x80,
-           "end": 0x8F,
-           "error": 0xFF}
-
-ROLES = {0 : "spectator", 1: "Cman", 2: "Spirit"}
 
 def read_script_inputs() -> int:
     parser = argparse.ArgumentParser(description="Run the server script.")
@@ -49,47 +39,59 @@ class Server:
         self.spectators: list[ServerClient] = []
         self.game = Game("map.txt")
         self.clients = {}
+        self.spirit_move = -1
+        self.cman_move = -1
+        self.game_ongoing = False
 
 
     def handle_new_client(self, data: bytes, client_address: tuple[str, int]) -> None:
         opcode = data[0]
         message = bytearray([OPCODES["error"]])
-        if opcode == OPCODES["join"]:
-            desired_role = data[1]
-            client = ServerClient(client_address, desired_role)
-            self.clients[client_address] = client
-            if desired_role == 0:
-                self.spectators.append(client)
-                return
-            elif desired_role == 1:
-                if self.cman_player is None:
-                    client = ServerClient(client_address, desired_role)
-                    self.cman_player = client
-                    print("Cman connected")
-                else: # role taken
-                    message.append(10)
-                    self.udp_socket.sendto(message, client_address)
-            elif desired_role == 2:
-                if self.spirit_player is None:
-                    client = ServerClient(client_address, desired_role)
-                    self.spirit_player = client
-                    print("Spirit connected")
-                else: # role taken
-                    message.append(10)
-                    self.udp_socket.sendto(message, client_address)
-            else: # incorrect desired role
-                message.append(3)
-                self.udp_socket.sendto(message, client_address)
-        else: # wrong opcode for new client
+        if opcode != OPCODES["join"]: # Bad opcode
             message.append(0)
             self.udp_socket.sendto(message, client_address)
-        if self.game_can_start():
-            self.send_game_updates()
+            return
 
+        desired_role = data[1]
+        client = ServerClient(client_address, desired_role)
+
+        if desired_role == 0:
+            self.clients[client_address] = client
+            self.spectators.append(client)
+            return
+
+        elif desired_role == 1:
+            if self.cman_player is not None:# role taken
+                message.append(10)
+                self.udp_socket.sendto(message, client_address)
+                return
+            self.clients[client_address] = client
+            self.cman_player = client
+            print("Cman connected")
+            if self.spirit_player is not None:
+                self.game.state = State.START
+                self.game_ongoing = True
+
+        elif desired_role == 2:
+            if self.spirit_player is not None: # role taken
+                message.append(10)
+                self.udp_socket.sendto(message, client_address)
+                return
+            self.clients[client_address] = client
+            self.spirit_player = client
+            print("Spirit connected")
+            if self.cman_player is not None:
+                self.game.state = State.START
+                self.game_ongoing = True
+
+        else: # incorrect desired role
+            message.append(3)
+            self.udp_socket.sendto(message, client_address)
+            return
 
     def is_game_over(self) -> bool:
         winner = self.game.get_winner()
-        return winner != -1
+        return winner != Player.NONE
 
     def append_points_as_bits(self, message: bytearray):
         points_dict = self.game.points
@@ -131,18 +133,17 @@ class Server:
         self.send_message_to_players(message)
         self.send_message_to_spectators(message)
         self.udp_socket.close()
-        exit(1)
-
-    def game_can_start(self):
-        return (self.cman_player is not None) and (self.spirit_player is not None)
+        exit(0)
 
     def send_game_updates(self) -> None:
         cman_address = self.cman_player.address
         spirit_address = self.spirit_player.address
-        message = bytearray()
-        message.append(OPCODES["game update"])
+        self.game.apply_move(Player.CMAN, self.cman_move)
+        self.game.apply_move(Player.SPIRIT, self.spirit_move)
+        self.cman_move = -1
+        self.spirit_move = -1
         can_move = self.game.can_move(self.cman_player.role - 1)
-        message.append(int(not can_move))
+        message = bytearray([OPCODES["game update"], int(not can_move)])
         self.append_game_state_to_message(message)
         self.udp_socket.sendto(message, cman_address)
         can_move = self.game.can_move(self.spirit_player.role - 1)
@@ -153,42 +154,42 @@ class Server:
         if self.is_game_over():
             self.finish_game()
 
+
     def handle_quit(self, client_address: tuple[str, int], data=None) -> None:
-        client = self.clients.pop(client_address)
+        client = self.clients[client_address]
         if client.role == 0:
             self.spectators.remove(client)
+            self.clients.pop(client_address)
             return
-        elif client.role == 1:
+        if self.game_ongoing:
+            if client.role == 1:
+                winner = Player.SPIRIT
+            else:
+                winner = Player.CMAN
+            self.game.declare_winner(winner)
+            self.finish_game()
+            return
+        self.clients.pop(client_address)
+        if client.role == 1:
             self.cman_player = None
-            winner = Player.SPIRIT
-
-        else:
+        if client.role == 2:
             self.spirit_player = None
-            winner = Player.CMAN
-        self.game.declare_winner(winner)
-        self.finish_game()
+
 
     def handle_movement(self, client_address: tuple[str, int], data: bytes):
-        if not self.game_can_start():
-            return
-        message = bytearray([OPCODES["error"]])
         client = self.clients[client_address]
         valid_directions = {0, 1, 2, 3}
-        player = client.role - 1
-
-        if len(data) == 0:
-            message.append(1)
-            self.udp_socket.sendto(message, client_address)
+        if len(data) <= 1:
             return
-
         direction = data[1]
         if direction not in valid_directions:
-            message.append(2)
-            self.udp_socket.sendto(message, client_address)
             return
-
-        if self.game.apply_move(player, direction):
-                self.send_game_updates()
+        if client == self.cman_player:
+            self.cman_move = direction
+            return
+        if client == self.spirit_player:
+            self.spirit_move = direction
+            return
 
 
     def run(self):
@@ -198,20 +199,23 @@ class Server:
             start_time = time.time()
             try:
                 data, client_address = self.udp_socket.recvfrom(1024)
+                if client_address in self.clients:
+                    opcode = data[0]
+                    if opcode in opcode_to_handler:
+                        opcode_to_handler[opcode](client_address, data)
+                    else:
+                        message = bytearray([OPCODES["error"], 0])
+                        self.udp_socket.sendto(message, client_address)
+                else:
+                    self.handle_new_client(data, client_address)
             except BlockingIOError:
-                continue
+                pass
             except Exception as e:
                 print("Error enocuntered with socket, existing")
                 exit(0)
-            if client_address in self.clients:
-                opcode = data[0]
-                if opcode in opcode_to_handler:
-                    opcode_to_handler[opcode](client_address, data)
-                else:
-                    message = bytearray([OPCODES["error"], 0])
-                    self.udp_socket.sendto(message, client_address)
-            else:
-                self.handle_new_client(data, client_address)
+
+            if self.game_ongoing:
+                self.send_game_updates()
             elapsed_time = time.time() - start_time
             sleep_time = max(0, frame_duration - elapsed_time)
             time.sleep(sleep_time)
