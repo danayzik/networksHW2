@@ -134,12 +134,16 @@ class Server:
         lives, score = self.game.get_game_progress()
         captures = MAX_ATTEMPTS - lives
         message = bytearray([OPCODES["end"], winner, captures, score])
+
+        readable, _, _ = select.select([self.udp_socket], [], [], 0.5)
+        if readable: #Flush residual packets
+            data, _ = self.udp_socket.recvfrom(1024)
         for i in range(10):
             try:
                 print("Sending ending message")
                 self.send_message_to_players(message)
                 self.send_message_to_spectators(message)
-                data, _ = self.udp_socket.recvfrom(1024)
+
             except Exception:
                 pass
             time.sleep(1)

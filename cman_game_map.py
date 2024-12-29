@@ -43,12 +43,15 @@ def clear_terminal():
         os.system("clear")
 
 def print_map(board):
+
+    map_str = '\n'.join(''.join(inner_list) for inner_list in board)
     clear_terminal()
-    rows, columns = (len(board), len(board[0]))
-    for i in range(rows):
-        for j in range(columns):
-            print(CHAR_VISUAL[board[i][j]], end='')
-        print("")
+    print(map_str)
+    # rows, columns = (len(board), len(board[0]))
+    # for i in range(rows):
+    #     for j in range(columns):
+    #         print(CHAR_VISUAL[board[i][j]], end='')
+    #     print("")
 
 def load_map(map_path):
     board = read_map(map_path).split('\n')
@@ -58,13 +61,13 @@ def load_map(map_path):
 def get_full_map(board, points, cman_coords, spirit_coords):
     board = deepcopy(board)
     i, j = cman_coords
-    board[i][j] = CMAN_CHAR
+    board[i][j] = CHAR_VISUAL[CMAN_CHAR]
 
     for coords in points:
         i, j = coords
-        board[i][j] = POINT_CHAR
+        board[i][j] = CHAR_VISUAL[POINT_CHAR]
     i, j = spirit_coords
-    board[i][j] = SPIRIT_CHAR
+    board[i][j] = CHAR_VISUAL[SPIRIT_CHAR]
     return board
 
 def strip_map(board):
@@ -72,7 +75,7 @@ def strip_map(board):
     rows, columns = (len(board), len(board[0]))
     for i in range(rows):
         for j in range(columns):
-            board[i][j] = FREE_CHAR if board[i][j] != WALL_CHAR else WALL_CHAR
+            board[i][j] = CHAR_VISUAL[FREE_CHAR] if board[i][j] != WALL_CHAR else CHAR_VISUAL[WALL_CHAR]
     return board
 
 
