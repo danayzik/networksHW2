@@ -32,7 +32,7 @@ class Server:
         print("Server started")
         self.udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.port = read_script_inputs()
-        self.server_address = ("::", self.port)
+        self.server_address = ("0.0.0.0", self.port)
         self.udp_socket.bind(self.server_address)
         self.cman_player:Optional[ServerClient] = None
         self.spirit_player:Optional[ServerClient] = None
