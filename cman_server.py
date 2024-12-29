@@ -30,7 +30,7 @@ class ServerClient:
 class Server:
     def __init__(self) -> None:
         print("Server started")
-        self.udp_socket = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
+        self.udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.port = read_script_inputs()
         self.server_address = ("::", self.port)
         self.udp_socket.bind(self.server_address)
@@ -233,7 +233,7 @@ class Server:
                         i += 1
                         command = data[i:i + opcode_length[opcode]]
                         i += opcode_length[opcode]
-                        client_address = (client_address[0] + "%11", client_address[1])
+                        # client_address = (client_address[0] + "%11", client_address[1])
                         if client_address in self.clients:
                             if opcode in opcode_to_handler:
                                 opcode_to_handler[opcode](client_address, bytearray([opcode])+command)

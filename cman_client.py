@@ -25,7 +25,7 @@ class Client:
         self.map = Map()
         self.key_handler = KeyInputHandler()
         self.role, addr, port = get_args()
-        self.socket = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
+        self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.server_address = (addr, port)
         self.can_move = False
         self.last_key = None
